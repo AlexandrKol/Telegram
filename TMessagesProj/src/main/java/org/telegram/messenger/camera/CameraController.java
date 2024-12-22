@@ -8,6 +8,7 @@
 
 package org.telegram.messenger.camera;
 
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -16,6 +17,9 @@ import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaRecorder;
 import android.os.Build;
@@ -23,6 +27,8 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
+
+import androidx.annotation.RequiresApi;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -641,6 +647,25 @@ public class CameraController implements MediaRecorder.OnInfoListener {
         });
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private static android.util.Size chooseVideoSize(android.util.Size[] choices) {
+
+        android.util.Size s = choices[choices.length - 1];
+        int w = s.getWidth();
+        for (android.util.Size size : choices) {
+
+            if(size.getWidth() == size.getHeight() * 16 / 9 ){
+                w = size.getWidth();
+                if(w > s.getWidth()) {
+                    s = size;
+                    w = s.getWidth();
+                }
+            }
+        }
+
+        return s;
+    }
+
     public void recordVideo(final Object session, final File path, boolean mirror, final VideoTakeCallback callback, final Runnable onVideoStartRecord, ICameraView cameraView) {
         recordVideo(session, path, mirror, callback, onVideoStartRecord, cameraView, true);
     }
@@ -659,13 +684,35 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                         CameraSession session = (CameraSession) sessionObject;
                         final CameraInfo info = session.cameraInfo;
                         final Camera camera = info.camera;
+
                         if (camera != null) {
                             try {
                                 Camera.Parameters params = camera.getParameters();
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                                    CameraManager manager = (CameraManager) ApplicationLoader.applicationContext.getSystemService(Context.CAMERA_SERVICE);
+                                    String[] cameraIds = manager.getCameraIdList();
+                                    for (int i = 0; i < cameraIds.length; ++i) {
+                                        final String id = cameraIds[i];
+                                        CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
+                                        if (characteristics == null) continue;
+                                        if (characteristics.get(CameraCharacteristics.LENS_FACING) !=  CameraCharacteristics.LENS_FACING_BACK) {
+                                            continue;
+                                        }
+                                        StreamConfigurationMap map =  characteristics
+                                                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                                        android.util.Size pictureSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+                                        params.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+
+                                        break;
+                                    }
+
+                                }
+
                                 params.setFlashMode(session.getCurrentFlashMode().equals(Camera.Parameters.FLASH_MODE_ON) ? Camera.Parameters.FLASH_MODE_TORCH : Camera.Parameters.FLASH_MODE_OFF);
                                 camera.setParameters(params);
                                 session.onStartRecord();
                             } catch (Exception e) {
+                                e.printStackTrace();
                                 FileLog.e(e);
                             }
                         }
@@ -717,6 +764,24 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                             Size pictureSize;
                             pictureSize = new Size(16, 9);
                             pictureSize = CameraController.chooseOptimalSize(info.getPictureSizes(), 720, 480, pictureSize, false);
+                            android.util.Size androidpictureSize = null;
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                                CameraManager manager = (CameraManager) ApplicationLoader.applicationContext.getSystemService(Context.CAMERA_SERVICE);
+                                String[] cameraIds = manager.getCameraIdList();
+                                for (int i = 0; i < cameraIds.length; ++i) {
+                                    final String id = cameraIds[i];
+                                    CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
+                                    if (characteristics == null) continue;
+                                    if (characteristics.get(CameraCharacteristics.LENS_FACING) !=  CameraCharacteristics.LENS_FACING_BACK) {
+                                        continue;
+                                    }
+                                    StreamConfigurationMap map =  characteristics
+                                            .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                                    androidpictureSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+                                    break;
+                                }
+
+                            }
                             int bitrate;
                             if (Math.min(pictureSize.mHeight, pictureSize.mWidth) >= 720) {
                                 bitrate = 3500000;
@@ -724,7 +789,8 @@ public class CameraController implements MediaRecorder.OnInfoListener {
                                 bitrate = 1800000;
                             }
                             recorder.setVideoEncodingBitRate(bitrate);
-                            recorder.setVideoSize(pictureSize.getWidth(), pictureSize.getHeight());
+                            if(androidpictureSize == null)    recorder.setVideoSize(pictureSize.getWidth(), pictureSize.getHeight());
+                            else   recorder.setVideoSize(androidpictureSize.getWidth(), androidpictureSize.getHeight());
                             recorder.setOnInfoListener(CameraController.this);
                             recorder.prepare();
                             recorder.start();

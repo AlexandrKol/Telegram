@@ -91,6 +91,7 @@ android {
             debuggable false
             jniDebuggable false
             signingConfig signingConfigs.release
+            applicationIdSuffix ".beta"
             minifyEnabled true
             shrinkResources false
             multiDexEnabled true

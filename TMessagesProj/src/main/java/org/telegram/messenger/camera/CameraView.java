@@ -59,6 +59,8 @@ import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import androidx.core.graphics.ColorUtils;
 
+import com.google.zxing.common.detector.MathUtils;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
@@ -437,10 +439,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             int W = thumbDrawable.getIntrinsicWidth(), H = thumbDrawable.getIntrinsicHeight();
             float scale = 1f / Math.min(W / (float) Math.max(1, bounds.width()), H / (float) Math.max(1, bounds.height()));
             thumbDrawable.setBounds(
-                (int) (bounds.centerX() - W * scale / 2f),
-                (int) (bounds.centerY() - H * scale / 2f),
-                (int) (bounds.centerX() + W * scale / 2f),
-                (int) (bounds.centerY() + H * scale / 2f)
+                    (int) (bounds.centerX() - W * scale / 2f),
+                    (int) (bounds.centerY() - H * scale / 2f),
+                    (int) (bounds.centerX() + W * scale / 2f),
+                    (int) (bounds.centerY() + H * scale / 2f)
             );
             thumbDrawable.draw(canvas);
         }
@@ -479,7 +481,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec),
-            height = MeasureSpec.getSize(heightMeasureSpec);
+                height = MeasureSpec.getSize(heightMeasureSpec);
         if (previewSize[0] != null && cameraSession[0] != null) {
             int frameWidth, frameHeight;
             if ((lastWidth != width || lastHeight != height) && measurementsCount > 1) {
@@ -1233,10 +1235,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         private final int cameraId[] = new int[] { -1, -1 };
 
         private final float[] verticesData = {
-            -1.0f, -1.0f, 0,
-            1.0f, -1.0f, 0,
-            -1.0f, 1.0f, 0,
-            1.0f, 1.0f, 0
+                -1.0f, -1.0f, 0,
+                1.0f, -1.0f, 0,
+                -1.0f, 1.0f, 0,
+                1.0f, 1.0f, 0
         };
 
         public CameraGLThread(SurfaceTexture surface) {
@@ -2082,8 +2084,16 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             }
             FileLog.d("CameraView camera scaleX = " + scaleX + " scaleY = " + scaleY);
         }
-
+        private final float[] tempVertices = new float[6];
         private void applyDualMatrix(Matrix matrix) {
+            tempVertices[0] = tempVertices[1] = 0;
+            tempVertices[2] = pixelW;
+            tempVertices[3] = 0;
+            tempVertices[4] = 0;
+            tempVertices[5] = pixelH;
+           matrix.mapPoints(tempVertices);
+           pixelDualW = MathUtils.distance(tempVertices[0], tempVertices[1], tempVertices[2], tempVertices[3]);
+            pixelDualH = MathUtils.distance(tempVertices[0], tempVertices[1], tempVertices[4], tempVertices[5]);
             getValues(matrix, cameraMatrix[1]);
         }
 
